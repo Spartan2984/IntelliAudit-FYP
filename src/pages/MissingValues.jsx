@@ -1,38 +1,105 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
 import {
   Activity, AlertCircle, CheckCircle2, Database, ListTodo,
-  Search, ShieldAlert, Sparkles, TrendingUp
+  Search, ShieldAlert, Sparkles, TrendingUp, AlertTriangle
 } from 'lucide-react';
-
-const mockChartData = [
-  { name: 'Age', missing: 15, present: 85, type: 'Numeric' },
-  { name: 'Income', missing: 8, present: 92, type: 'Numeric' },
-  { name: 'City', missing: 5, present: 95, type: 'Categorical' },
-  { name: 'Education', missing: 2, present: 98, type: 'Categorical' },
-  { name: 'Occupation', missing: 0, present: 100, type: 'Categorical' },
-  { name: 'Marital Status', missing: 0, present: 100, type: 'Categorical' },
-];
-
-const mockRecommendations = [
-  { col: 'Age', rec: 'KNN Imputation', reason: 'Numeric data with 15% missing. Preserves variance better than mean.' },
-  { col: 'Income', rec: 'Median Imputation', reason: 'Numeric data, 8% missing. Robust to income outliers.' },
-  { col: 'City', rec: 'Mode Imputation', reason: 'Categorical data, low missing rate (5%).' },
-];
+import { Link } from 'react-router-dom';
+import { useDataset } from '../contexts/DatasetContext';
 
 export default function MissingValues() {
+  const { dataset } = useDataset();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [chartData, setChartData] = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
+  const [stats, setStats] = useState({
+    score: '0%',
+    missingRows: 0,
+    quality: 'N/A',
+    mechanism: 'N/A'
+  });
 
   const handleRunAnalysis = () => {
+    if (!dataset || !dataset.rows) {
+      alert("Please upload a dataset first.");
+      return;
+    }
+
     setIsAnalyzing(true);
+
     // Simulate ML model analysis time
     setTimeout(() => {
+      const totalRows = dataset.rows.length;
+      const headers = dataset.headers;
+
+      const analysis = headers.map(header => {
+        const missingCount = dataset.rows.filter(row => {
+          const val = row[header];
+          return val === null || val === undefined || String(val).trim() === '';
+        }).length;
+        const missingPercent = (missingCount / totalRows) * 100;
+
+        // Basic type detection
+        const firstVal = dataset.rows.find(row => row[header] !== null && row[header] !== undefined && String(row[header]).trim() !== '')?.[header];
+        const isNumeric = !isNaN(parseFloat(firstVal)) && isFinite(firstVal);
+
+        return {
+          name: header,
+          missing: parseFloat(missingPercent.toFixed(2)),
+          present: parseFloat((100 - missingPercent).toFixed(2)),
+          type: isNumeric ? 'Numeric' : 'Categorical',
+          count: missingCount
+        };
+      });
+
+      setChartData(analysis);
+
+      // Generate dynamic recommendations
+      const recs = analysis
+        .filter(item => item.missing > 0)
+        .sort((a, b) => b.missing - a.missing)
+        .slice(0, 5)
+        .map(item => {
+          let rec = '';
+          let reason = '';
+          if (item.type === 'Numeric') {
+            rec = item.missing > 15 ? 'KNN Imputation' : 'Median Imputation';
+            reason = `${item.type} data with ${item.missing}% missing. ${rec} preserves statistical properties.`;
+          } else {
+            rec = 'Mode Imputation';
+            reason = `${item.type} data with ${item.missing}% missing. Mode is safest for categorical labels.`;
+          }
+          return { col: item.name, rec, reason };
+        });
+      setRecommendations(recs);
+
+      // Calculate Stats
+      const totalCells = totalRows * headers.length;
+      const totalMissingCells = analysis.reduce((acc, curr) => acc + curr.count, 0);
+      const overallMissingPercent = (totalMissingCells / totalCells) * 100;
+
+      const rowsWithMissing = dataset.rows.filter(row =>
+        headers.some(h => row[h] === null || row[h] === undefined || String(row[h]).trim() === '')
+      ).length;
+
+      let quality = 'A';
+      if (overallMissingPercent > 20) quality = 'D';
+      else if (overallMissingPercent > 10) quality = 'C';
+      else if (overallMissingPercent > 5) quality = 'B';
+
+      setStats({
+        score: overallMissingPercent.toFixed(1) + '%',
+        missingRows: rowsWithMissing,
+        quality: quality,
+        mechanism: overallMissingPercent > 0 ? 'MAR' : 'None'
+      });
+
       setIsAnalyzing(false);
       setAnalysisComplete(true);
-    }, 2500);
+    }, 2000);
   };
 
   return (
@@ -56,20 +123,40 @@ export default function MissingValues() {
 
       {!analysisComplete && !isAnalyzing && (
         <div className="bg-white dark:bg-[#05142e]/80 backdrop-blur-sm p-12 rounded-2xl shadow-md dark:shadow-lg border border-slate-200 dark:border-[#1a325a] min-h-[400px] flex flex-col items-center justify-center text-center transition-colors duration-500">
-          <div className="w-20 h-20 bg-blue-50 dark:bg-blue-500/10 rounded-full flex items-center justify-center mb-6 border border-blue-100 dark:border-blue-500/20">
-            <Search className="w-10 h-10 text-blue-500 dark:text-blue-400" />
-          </div>
-          <h3 className="text-2xl font-semibold mb-3 text-slate-800 dark:text-white">Ready to Analyze Dataset</h3>
-          <p className="text-slate-500 dark:text-[#8ba3c9] max-w-md mb-8">
-            Click the button below to scan your dataset for missing values, identify patterns, and get AI-driven imputation recommendations.
-          </p>
-          <button
-            onClick={handleRunAnalysis}
-            className="px-8 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl shadow-lg shadow-blue-500/25 font-medium tracking-wide flex items-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <Activity className="w-5 h-5" />
-            Run Missing Analysis
-          </button>
+          {!dataset ? (
+            <>
+              <div className="w-20 h-20 bg-blue-50 dark:bg-blue-500/10 rounded-full flex items-center justify-center mb-6 border border-blue-100 dark:border-blue-500/20">
+                <Search className="w-10 h-10 text-blue-500 dark:text-blue-400" />
+              </div>
+              <h3 className="text-2xl font-semibold mb-3 text-slate-800 dark:text-white">No Dataset Detected</h3>
+              <p className="text-slate-500 dark:text-[#8ba3c9] max-w-md mb-8">
+                You need to upload a CSV dataset before you can run a missing value analysis.
+              </p>
+              <Link
+                to="/upload"
+                className="px-8 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg font-medium tracking-wide flex items-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                Go to Upload
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className="w-20 h-20 bg-blue-50 dark:bg-blue-500/10 rounded-full flex items-center justify-center mb-6 border border-blue-100 dark:border-blue-500/20">
+                <Search className="w-10 h-10 text-blue-500 dark:text-blue-400" />
+              </div>
+              <h3 className="text-2xl font-semibold mb-3 text-slate-800 dark:text-white">Ready to Analyze Dataset</h3>
+              <p className="text-slate-500 dark:text-[#8ba3c9] max-w-md mb-8">
+                Click the button below to scan your dataset for missing values, identify patterns, and get AI-driven imputation recommendations.
+              </p>
+              <button
+                onClick={handleRunAnalysis}
+                className="px-8 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl shadow-lg shadow-blue-500/25 font-medium tracking-wide flex items-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <Activity className="w-5 h-5" />
+                Run Missing Analysis
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -96,7 +183,7 @@ export default function MissingValues() {
               <div className="flex justify-between items-start mb-4 relative z-10">
                 <div>
                   <p className="text-sm font-medium text-slate-500 dark:text-[#8ba3c9]">Value Score</p>
-                  <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">12%</h3>
+                  <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{stats.score}</h3>
                 </div>
                 <div className="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg">
                   <Activity className="w-5 h-5 text-blue-500 dark:text-blue-400" />
@@ -110,13 +197,13 @@ export default function MissingValues() {
               <div className="flex justify-between items-start mb-4 relative z-10">
                 <div>
                   <p className="text-sm font-medium text-slate-500 dark:text-[#8ba3c9]">Missing Rows</p>
-                  <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">1,200</h3>
+                  <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{stats.missingRows.toLocaleString()}</h3>
                 </div>
                 <div className="p-2 bg-rose-50 dark:bg-rose-500/10 rounded-lg">
                   <Database className="w-5 h-5 text-rose-500 dark:text-rose-400" />
                 </div>
               </div>
-              <p className="text-xs text-slate-500 dark:text-[#8ba3c9] relative z-10">Out of 10,000 total rows</p>
+              <p className="text-xs text-slate-500 dark:text-[#8ba3c9] relative z-10">Out of {dataset?.rows?.length?.toLocaleString()} total rows</p>
             </div>
 
             <div className="bg-white dark:bg-[#05142e]/80 backdrop-blur-sm p-6 rounded-2xl border border-slate-200 dark:border-[#1a325a] shadow-sm relative overflow-hidden group">
@@ -124,7 +211,7 @@ export default function MissingValues() {
               <div className="flex justify-between items-start mb-4 relative z-10">
                 <div>
                   <p className="text-sm font-medium text-slate-500 dark:text-[#8ba3c9]">Data Quality</p>
-                  <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">B-</h3>
+                  <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{stats.quality}</h3>
                 </div>
                 <div className="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
                   <CheckCircle2 className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
@@ -138,13 +225,13 @@ export default function MissingValues() {
               <div className="flex justify-between items-start mb-4 relative z-10">
                 <div>
                   <p className="text-sm font-medium text-slate-500 dark:text-[#8ba3c9]">Mechanism</p>
-                  <h3 className="text-2xl font-bold text-slate-800 dark:text-white mt-2">MAR</h3>
+                  <h3 className="text-2xl font-bold text-slate-800 dark:text-white mt-2">{stats.mechanism}</h3>
                 </div>
                 <div className="p-2 bg-amber-50 dark:bg-amber-500/10 rounded-lg">
                   <ShieldAlert className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                 </div>
               </div>
-              <p className="text-xs text-slate-500 dark:text-[#8ba3c9] relative z-10">Missing At Random</p>
+              <p className="text-xs text-slate-500 dark:text-[#8ba3c9] relative z-10">Missing Mechanism</p>
             </div>
           </div>
 
@@ -161,7 +248,7 @@ export default function MissingValues() {
               </div>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={mockChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
                     <XAxis
                       dataKey="name"
@@ -188,10 +275,10 @@ export default function MissingValues() {
                       itemStyle={{ color: '#f8fafc' }}
                     />
                     <Bar dataKey="missing" radius={[6, 6, 0, 0]} maxBarSize={40}>
-                      {mockChartData.map((entry, index) => (
+                      {chartData.map((entry, index) => (
                         <Cell
                           key={`cell-${index}`}
-                          fill={entry.missing > 10 ? '#ef4444' : entry.missing > 0 ? '#f59e0b' : '#10b981'}
+                          fill={entry.missing > 15 ? '#ef4444' : entry.missing > 0 ? '#f59e0b' : '#10b981'}
                         />
                       ))}
                     </Bar>
@@ -208,7 +295,7 @@ export default function MissingValues() {
                   AI Recommendations
                 </h3>
                 <div className="space-y-4">
-                  {mockRecommendations.map((item, i) => (
+                  {recommendations.length > 0 ? recommendations.map((item, i) => (
                     <div key={i} className="p-3 bg-slate-50 dark:bg-[#0a1f44] rounded-xl border border-slate-100 dark:border-[#1a325a]">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-medium text-sm text-slate-800 dark:text-white">{item.col}</span>
@@ -220,7 +307,12 @@ export default function MissingValues() {
                         {item.reason}
                       </p>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="text-center py-8 text-slate-400">
+                      <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
+                      <p className="text-sm">No missing values found!</p>
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -3,7 +3,11 @@ import React, { createContext, useState, useContext } from 'react';
 const DatasetContext = createContext();
 
 export function useDataset() {
-  return useContext(DatasetContext);
+  const context = useContext(DatasetContext);
+  if (!context) {
+    throw new Error('useDataset must be used within a DatasetProvider');
+  }
+  return context;
 }
 
 export function DatasetProvider({ children }) {

@@ -1,0 +1,10 @@
+name,age,email,city,salary
+John Doe,25,john@example.com,New York,50000
+Jane Smith,30,jane@example.com,London,60000
+John Doe,25,john@example.com,New York,50000
+Bob Brown,,bob@example.com,Paris,
+Alice Green,22,,Berlin,70000
+Charlie Black,35,charlie@example.com,,
+Jane Smith,30,jane@example.com,London,60000
+Eve White,28,eve@example.com,San Francisco,1500000
+Frank Blue,40,frank@example.com,Chicago,-5000
