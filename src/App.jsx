@@ -12,27 +12,30 @@ import CleaningActions from './pages/CleaningActions';
 import CleanedPreview from './pages/CleanedPreview';
 import Report from './pages/Report';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { DatasetProvider } from './contexts/DatasetContext';
 
 function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/workflow" element={<Workflow />} />
-          
-          <Route element={<DashboardLayout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/upload" element={<Upload />} />
-            <Route path="/preview" element={<Preview />} />
-            <Route path="/missing-values" element={<MissingValues />} />
-            <Route path="/duplicates" element={<Duplicates />} />
-            <Route path="/cleaning-actions" element={<CleaningActions />} />
-            <Route path="/cleaned-preview" element={<CleanedPreview />} />
-            <Route path="/report" element={<Report />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <DatasetProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/workflow" element={<Workflow />} />
+            
+            <Route element={<DashboardLayout />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/upload" element={<Upload />} />
+              <Route path="/preview" element={<Preview />} />
+              <Route path="/missing-values" element={<MissingValues />} />
+              <Route path="/duplicates" element={<Duplicates />} />
+              <Route path="/cleaning-actions" element={<CleaningActions />} />
+              <Route path="/cleaned-preview" element={<CleanedPreview />} />
+              <Route path="/report" element={<Report />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </DatasetProvider>
     </ThemeProvider>
   );
 }
