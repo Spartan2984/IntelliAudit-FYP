@@ -1,16 +1,81 @@
-# React + Vite
+# IntelliAudit
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+IntelliAudit is a modern, React-based web application designed for comprehensive data auditing and cleaning workflows. It provides an intuitive interface for users to upload datasets, analyze data quality, and apply various cleaning operations such as handling missing values and removing duplicates.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Interactive Dashboard:** Visualize key data metrics and project status.
+- **Data Upload & Preview:** Easily upload datasets and preview raw data.
+- **Data Auditing Workflow:**
+  - **Missing Values Management:** Identify and resolve missing data points.
+  - **Duplicate Detection:** Find and manage duplicate records effectively.
+  - **Cleaning Actions:** Apply custom cleaning transformations to the dataset.
+- **Cleaned Data Preview:** Review the dataset after cleaning operations have been applied.
+- **Reporting:** Generate summaries and reports of the data auditing process.
+- **Dark/Light Theme:** Built-in theme toggling for a comfortable user experience.
 
-## React Compiler
+## Technology Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Frontend Framework:** React 19
+- **Build Tool:** Vite
+- **Routing:** React Router v7
+- **Styling:** Tailwind CSS v4
+- **Icons:** Lucide React
+- **Data Visualization:** Recharts
+- **Linting:** ESLint
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### Prerequisites
+
+Make sure you have [Node.js](https://nodejs.org/) installed on your system.
+
+### Installation
+
+1. Clone the repository or navigate to the project directory:
+   ```bash
+   cd IntelliAudit
+   ```
+
+2. Install the dependencies:
+   ```bash
+   npm install
+   ```
+
+### Running the Development Server
+
+Start the Vite development server:
+
+```bash
+npm run dev
+```
+
+The application will be available at `http://localhost:5173` (or another port if 5173 is in use).
+
+### Building for Production
+
+To create a production build:
+
+```bash
+npm run build
+```
+
+This will generate a `dist` folder containing the optimized production assets. You can preview the production build locally using:
+
+```bash
+npm run preview
+```
+
+## Project Structure
+
+- `src/`
+  - `components/`: Reusable UI components.
+  - `contexts/`: React contexts (e.g., `ThemeContext` for light/dark mode).
+  - `layouts/`: Page layouts (e.g., `DashboardLayout`).
+  - `pages/`: Individual application pages (Dashboard, Upload, Preview, MissingValues, Duplicates, etc.).
+  - `App.jsx`: Main application component and routing configuration.
+  - `main.jsx`: Entry point for the React application.
+- `package.json`: Project dependencies and scripts.
+- `vite.config.js`: Vite configuration.
+- `postcss.config.js` / `tailwind.config.js`: Tailwind CSS and PostCSS configuration.
+
