@@ -7,7 +7,7 @@ $$\text{Detection} \longrightarrow \text{Explanation} \longrightarrow \text{Reco
 
 ---
 
-## 📌 Phase A — Sona: Dataset Upload, Profiling & Missing-Value Processing
+## 📌 Phase A : Dataset Upload, Profiling & Missing-Value Processing
 
 **Role & Objective:**  
 Build the core foundation of the system by correctly uploading, validating, parsing, profiling, and preprocessing the dataset while preserving an immutable `original_dataset` and generating an active `working_dataset` for subsequent modules.
