@@ -3,11 +3,69 @@
  * Handles explainable AI-driven recommendations, confidence scoring, and imputation algorithms.
  */
 
-import { isMissingValue, computeNumericStats, computeCategoricalStats } from './dataProfiler.js';
+import { 
+  isMissingValue, 
+  computeNumericStats, 
+  computeCategoricalStats,
+  SKEWNESS_THRESHOLD 
+} from './dataProfiler.js';
+
+/**
+ * Validates and coerces a custom value based on the column's detected type
+ * @param {any} val - Input custom value
+ * @param {string} columnType - Detected data type (Integer, Float, Boolean, Categorical, Date, ID / Key)
+ * @returns {Object} { valid: boolean, value?: any, error?: string }
+ */
+export function validateAndCoerceCustomValue(val, columnType = '') {
+  if (val === null || val === undefined || String(val).trim() === '') {
+    return { valid: false, error: 'Custom value cannot be empty.' };
+  }
+  const str = String(val).trim();
+
+  if (columnType === 'Integer') {
+    const num = Number(str);
+    if (isNaN(num) || !isFinite(num) || !Number.isInteger(num)) {
+      return { 
+        valid: false, 
+        error: `Invalid integer "${val}" for numeric column. Please enter a whole integer value (e.g., 25).` 
+      };
+    }
+    return { valid: true, value: num };
+  }
+
+  if (columnType === 'Float') {
+    const num = Number(str);
+    if (isNaN(num) || !isFinite(num)) {
+      return { 
+        valid: false, 
+        error: `Invalid numeric value "${val}" for float column. Please enter a valid number (e.g., 25.5).` 
+      };
+    }
+    return { valid: true, value: num };
+  }
+
+  if (columnType === 'Boolean') {
+    const lower = str.toLowerCase();
+    if (['true', '1', 'yes', 'y'].includes(lower)) {
+      return { valid: true, value: 'true' };
+    }
+    if (['false', '0', 'no', 'n'].includes(lower)) {
+      return { valid: true, value: 'false' };
+    }
+    return { 
+      valid: false, 
+      error: `Invalid boolean "${val}". Allowed values are: true, false, yes, no, 1, 0.` 
+    };
+  }
+
+  // String / Categorical / Date / ID / Key
+  return { valid: true, value: str };
+}
 
 /**
  * Generates explainable recommendations for all columns with missing values
  * @param {Array<Object>} columnsMetadata 
+ * @param {Object} options 
  * @returns {Array<Object>}
  */
 export function generateMissingRecommendations(columnsMetadata) {
@@ -32,7 +90,9 @@ export function generateMissingRecommendations(columnsMetadata) {
 
     if (col.dataType === 'Integer' || col.dataType === 'Float') {
       const stats = col.stats || {};
-      const isSkewed = stats.isSkewed || Math.abs(stats.skewness || 0) > 0.8;
+      const isSkewed = stats.isSkewed !== undefined 
+        ? stats.isSkewed 
+        : Math.abs(stats.skewness || 0) > SKEWNESS_THRESHOLD;
       const calculatedMedian = stats.median !== undefined ? stats.median : 0;
       const calculatedMean = stats.mean !== undefined ? stats.mean : 0;
 
@@ -47,14 +107,14 @@ export function generateMissingRecommendations(columnsMetadata) {
         rec.recommendedMethod = 'Median';
         rec.confidence = confScore;
         rec.suggestedValue = calculatedMedian;
-        rec.reason = `The column is skewed (skewness: ${stats.skewness}) and contains extreme variance (IQR: ${stats.iqr}). The median (${calculatedMedian}) is robust against outlier distortion and preserves realistic distributions.`;
+        rec.reason = `The column is skewed (skewness: ${stats.skewness}, threshold: ${SKEWNESS_THRESHOLD}) and contains extreme variance (IQR: ${stats.iqr}). The median (${calculatedMedian}) is robust against outlier distortion and preserves realistic distributions.`;
         rec.alternativeMethods = ['Mean', 'Custom Value', 'Drop Rows'];
       } else {
         const confScore = Math.min(94, Math.max(85, 90 - Math.round(Math.abs(stats.skewness || 0) * 5)));
         rec.recommendedMethod = 'Mean';
         rec.confidence = confScore;
         rec.suggestedValue = calculatedMean;
-        rec.reason = `The column exhibits a symmetric distribution (skewness: ${stats.skewness}). Mean imputation (${calculatedMean}) preserves the dataset's central tendency and arithmetic expectation.`;
+        rec.reason = `The column exhibits a symmetric distribution (skewness: ${stats.skewness}, within threshold ±${SKEWNESS_THRESHOLD}). Mean imputation (${calculatedMean}) preserves the dataset's central tendency and arithmetic expectation.`;
         rec.alternativeMethods = ['Median', 'Custom Value', 'Drop Rows'];
       }
     } else if (col.dataType === 'Boolean') {
@@ -110,19 +170,22 @@ export function generateMissingRecommendations(columnsMetadata) {
  * @param {string} column 
  * @param {string} method ('Mean' | 'Median' | 'Mode' | 'Custom Value' | 'Drop Rows')
  * @param {any} customValue 
- * @returns {Object} { updatedRows, replacementValue, affectedRowCount, affectedIndices, auditEntry }
+ * @param {string} columnType (optional type for type safety validation)
+ * @param {Object} options (missing marker options)
+ * @returns {Object} { updatedRows, replacementValue, affectedRowCount, affectedIndices, affectedRows, column, method, timestamp }
  */
-export function executeImputation(rows, column, method, customValue = '') {
+export function executeImputation(rows, column, method, customValue = '', columnType = '', options = {}) {
   if (!rows || rows.length === 0 || !column) {
     throw new Error('Invalid parameters for imputation');
   }
 
+  // Deep clone rows to ensure immutability
   const updatedRows = rows.map(r => ({ ...r }));
   const affectedIndices = [];
 
   // Find all rows where column is missing
   updatedRows.forEach((row, idx) => {
-    if (isMissingValue(row[column])) {
+    if (isMissingValue(row[column], options)) {
       affectedIndices.push(idx);
     }
   });
@@ -133,6 +196,7 @@ export function executeImputation(rows, column, method, customValue = '') {
       replacementValue: null,
       affectedRowCount: 0,
       affectedIndices: [],
+      affectedRows: [],
       column,
       method,
       timestamp: new Date().toISOString()
@@ -142,12 +206,22 @@ export function executeImputation(rows, column, method, customValue = '') {
   let replacementValue = null;
 
   if (method === 'Drop Rows') {
-    const filteredRows = updatedRows.filter(r => !isMissingValue(r[column]));
+    const affectedRows = affectedIndices.map(idx => {
+      const r = updatedRows[idx];
+      return {
+        rowId: r.__row_id !== undefined ? r.__row_id : idx + 1,
+        originalValue: r[column],
+        newValue: '[REMOVED]'
+      };
+    });
+
+    const filteredRows = updatedRows.filter(r => !isMissingValue(r[column], options));
     return {
       updatedRows: filteredRows,
       replacementValue: '[REMOVED]',
       affectedRowCount: affectedIndices.length,
       affectedIndices,
+      affectedRows,
       column,
       method: 'Drop Rows',
       timestamp: new Date().toISOString()
@@ -155,25 +229,44 @@ export function executeImputation(rows, column, method, customValue = '') {
   }
 
   const nonMissingValues = updatedRows
-    .filter(r => !isMissingValue(r[column]))
+    .filter(r => !isMissingValue(r[column], options))
     .map(r => r[column]);
 
   if (method === 'Mean') {
-    const stats = computeNumericStats(nonMissingValues);
+    const stats = computeNumericStats(nonMissingValues, options);
     replacementValue = stats.mean;
   } else if (method === 'Median') {
-    const stats = computeNumericStats(nonMissingValues);
+    const stats = computeNumericStats(nonMissingValues, options);
     replacementValue = stats.median;
   } else if (method === 'Mode') {
-    const stats = computeCategoricalStats(nonMissingValues);
+    const stats = computeCategoricalStats(nonMissingValues, options);
     replacementValue = stats.mode;
   } else if (method === 'Custom Value') {
-    replacementValue = customValue;
+    // Type-safe validation
+    if (columnType) {
+      const typeCheck = validateAndCoerceCustomValue(customValue, columnType);
+      if (!typeCheck.valid) {
+        throw new Error(typeCheck.error);
+      }
+      replacementValue = typeCheck.value;
+    } else {
+      replacementValue = customValue;
+    }
   } else {
     // Default fallback to median if numeric, else mode
-    const stats = computeNumericStats(nonMissingValues);
+    const stats = computeNumericStats(nonMissingValues, options);
     replacementValue = stats.count > 0 ? stats.median : 'Unknown';
   }
+
+  // Collect affected rows with stable rowId, originalValue, and newValue
+  const affectedRows = affectedIndices.map(idx => {
+    const r = updatedRows[idx];
+    return {
+      rowId: r.__row_id !== undefined ? r.__row_id : idx + 1,
+      originalValue: r[column],
+      newValue: replacementValue
+    };
+  });
 
   // Apply replacement
   affectedIndices.forEach(idx => {
@@ -185,6 +278,7 @@ export function executeImputation(rows, column, method, customValue = '') {
     replacementValue,
     affectedRowCount: affectedIndices.length,
     affectedIndices,
+    affectedRows,
     column,
     method,
     timestamp: new Date().toISOString()

@@ -3,8 +3,11 @@
  * Handles type inference, descriptive statistics, dataset-level & column-level profiling.
  */
 
-// Standard missing value representations in CSVs
-export const MISSING_MARKERS = new Set([
+// Shared skewness threshold across profiling and recommendations
+export const SKEWNESS_THRESHOLD = 0.8;
+
+// Standard common missing value representations in CSVs
+export const DEFAULT_MISSING_MARKERS = new Set([
   '',
   'null',
   'nan',
@@ -13,35 +16,55 @@ export const MISSING_MARKERS = new Set([
   '#n/a',
   'none',
   'nil',
-  '-',
-  '?',
   'undefined',
   'missing'
 ]);
 
+// Ambiguous markers that are optional/configurable (e.g. '-' or '?' might be valid values)
+export const AMBIGUOUS_MISSING_MARKERS = new Set([
+  '-',
+  '?'
+]);
+
+// Backward compatibility export
+export const MISSING_MARKERS = DEFAULT_MISSING_MARKERS;
+
 /**
  * Checks if a cell value represents a missing value
+ * @param {any} val - Cell value to check
+ * @param {Object} options - Configuration options ({ includeAmbiguousMarkers: boolean, customMarkers: Set })
  */
-export function isMissingValue(val) {
+export function isMissingValue(val, options = {}) {
   if (val === null || val === undefined) return true;
   if (typeof val === 'number' && isNaN(val)) return true;
   const str = String(val).trim().toLowerCase();
-  return MISSING_MARKERS.has(str);
+  
+  if (DEFAULT_MISSING_MARKERS.has(str)) return true;
+
+  if (options.includeAmbiguousMarkers || options.includeAmbiguous) {
+    if (AMBIGUOUS_MISSING_MARKERS.has(str)) return true;
+  }
+
+  if (options.customMarkers && typeof options.customMarkers.has === 'function') {
+    if (options.customMarkers.has(str)) return true;
+  }
+
+  return false;
 }
 
 /**
  * Normalizes a cell value: returns null if missing, or trimmed original string/value
  */
-export function normalizeValue(val) {
-  if (isMissingValue(val)) return null;
+export function normalizeValue(val, options = {}) {
+  if (isMissingValue(val, options)) return null;
   return typeof val === 'string' ? val.trim() : val;
 }
 
 /**
  * Determines the data type of a column based on non-missing sample values
  */
-export function detectColumnType(values, columnName = '') {
-  const nonMissing = values.filter(v => !isMissingValue(v)).map(v => String(v).trim());
+export function detectColumnType(values, columnName = '', options = {}) {
+  const nonMissing = values.filter(v => !isMissingValue(v, options)).map(v => String(v).trim());
   if (nonMissing.length === 0) return 'Categorical';
 
   // Check Boolean
@@ -124,9 +147,9 @@ function calculatePercentile(sortedArr, p) {
 /**
  * Computes descriptive statistics for numeric values
  */
-export function computeNumericStats(rawValues) {
+export function computeNumericStats(rawValues, options = {}) {
   const numbers = rawValues
-    .filter(v => !isMissingValue(v))
+    .filter(v => !isMissingValue(v, options))
     .map(v => Number(v))
     .filter(n => !isNaN(n) && isFinite(n));
 
@@ -189,16 +212,16 @@ export function computeNumericStats(rawValues) {
     q3: Number(q3.toFixed(2)),
     iqr: Number(iqr.toFixed(2)),
     skewness: Number(skewness.toFixed(2)),
-    isSkewed: Math.abs(skewness) > 1.0 || (iqr > 0 && (max - q3 > 3 * iqr || q1 - min > 3 * iqr))
+    isSkewed: Math.abs(skewness) > SKEWNESS_THRESHOLD
   };
 }
 
 /**
  * Computes frequency statistics for categorical values
  */
-export function computeCategoricalStats(rawValues) {
+export function computeCategoricalStats(rawValues, options = {}) {
   const nonMissing = rawValues
-    .filter(v => !isMissingValue(v))
+    .filter(v => !isMissingValue(v, options))
     .map(v => String(v).trim());
 
   if (nonMissing.length === 0) {
@@ -241,14 +264,18 @@ export function computeCategoricalStats(rawValues) {
  * @param {Array<string>} headers 
  * @param {Array<Object>} rows 
  * @param {Object} metadata 
+ * @param {Object} options 
  */
-export function computeDatasetProfile(headers, rows, metadata = {}) {
+export function computeDatasetProfile(headers, rows, metadata = {}, options = {}) {
   if (!headers || !rows || rows.length === 0) {
     return null;
   }
 
+  // Filter out internal __row_id from profiled headers if present
+  const validHeaders = headers.filter(h => h !== '__row_id');
+
   const totalRows = rows.length;
-  const totalColumns = headers.length;
+  const totalColumns = validHeaders.length;
   const totalCells = totalRows * totalColumns;
 
   let totalMissingCells = 0;
@@ -260,38 +287,38 @@ export function computeDatasetProfile(headers, rows, metadata = {}) {
   const idCols = [];
   const booleanCols = [];
 
-  headers.forEach(header => {
+  validHeaders.forEach(header => {
     const colValues = rows.map(r => r[header]);
     
     // Missing count
-    const missingCount = colValues.filter(isMissingValue).length;
+    const missingCount = colValues.filter(v => isMissingValue(v, options)).length;
     const missingPercentage = Number(((missingCount / totalRows) * 100).toFixed(2));
     totalMissingCells += missingCount;
 
     // Detect data type
-    const dataType = detectColumnType(colValues, header);
+    const dataType = detectColumnType(colValues, header, options);
 
     // Unique count on non-missing
-    const nonMissingValues = colValues.filter(v => !isMissingValue(v));
+    const nonMissingValues = colValues.filter(v => !isMissingValue(v, options));
     const uniqueValues = new Set(nonMissingValues.map(v => String(v).trim()));
     const uniqueCount = uniqueValues.size;
     const uniquePercentage = totalRows > 0 ? Number(((uniqueCount / totalRows) * 100).toFixed(2)) : 0;
 
-    let stats = {};
+    let stats;
     if (dataType === 'Integer' || dataType === 'Float') {
-      stats = computeNumericStats(colValues);
+      stats = computeNumericStats(colValues, options);
       numericalCols.push(header);
     } else if (dataType === 'Date') {
-      stats = computeCategoricalStats(colValues);
+      stats = computeCategoricalStats(colValues, options);
       dateCols.push(header);
     } else if (dataType === 'ID / Key') {
-      stats = computeCategoricalStats(colValues);
+      stats = computeCategoricalStats(colValues, options);
       idCols.push(header);
     } else if (dataType === 'Boolean') {
-      stats = computeCategoricalStats(colValues);
+      stats = computeCategoricalStats(colValues, options);
       booleanCols.push(header);
     } else {
-      stats = computeCategoricalStats(colValues);
+      stats = computeCategoricalStats(colValues, options);
       categoricalCols.push(header);
     }
 
@@ -307,11 +334,15 @@ export function computeDatasetProfile(headers, rows, metadata = {}) {
     });
   });
 
-  // Calculate duplicate rows (exact matches)
+  // Calculate duplicate rows (exact matches on dataset headers, ignoring internal __row_id)
   const seenHashes = new Set();
   let duplicateRowsCount = 0;
   rows.forEach(row => {
-    const hash = JSON.stringify(row);
+    const rowData = {};
+    validHeaders.forEach(h => {
+      rowData[h] = row[h];
+    });
+    const hash = JSON.stringify(rowData);
     if (seenHashes.has(hash)) {
       duplicateRowsCount++;
     } else {
@@ -319,11 +350,11 @@ export function computeDatasetProfile(headers, rows, metadata = {}) {
     }
   });
 
-  const overallMissingRate = Number(((totalMissingCells / totalCells) * 100).toFixed(2));
+  const overallMissingRate = totalCells > 0 ? Number(((totalMissingCells / totalCells) * 100).toFixed(2)) : 0;
 
   // Rows with at least one missing value
   const rowsWithMissing = rows.filter(row =>
-    headers.some(h => isMissingValue(row[h]))
+    validHeaders.some(h => isMissingValue(row[h], options))
   ).length;
 
   return {

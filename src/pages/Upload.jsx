@@ -80,7 +80,7 @@ export default function Upload() {
           return;
         }
 
-        const fields = meta.fields ? meta.fields.filter(f => f && f.trim() !== '') : [];
+        const fields = (meta.fields ? meta.fields.filter(f => f && f.trim() !== '') : []).filter(f => f !== '__row_id');
 
         if (!fields || fields.length === 0) {
           setLoading(false);
