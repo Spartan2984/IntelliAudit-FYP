@@ -101,7 +101,7 @@ export default function Preview() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-3 py-1 bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 rounded-full text-xs font-semibold tracking-wider uppercase">
-              Phase A &bull; Sona
+              Dataset Profiling
             </span>
             <span className="text-xs text-slate-400 dark:text-[#8ba3c9]">Step 2 of 8</span>
           </div>
@@ -219,7 +219,7 @@ export default function Preview() {
           <div className="p-5 border-b border-slate-200 dark:border-[#1a325a] flex items-center justify-between">
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="w-5 h-5 text-blue-500" />
-              <h3 className="font-bold text-slate-800 dark:text-white">Column-Level Statistical Metrics (Sona Engine)</h3>
+              <h3 className="font-bold text-slate-800 dark:text-white">Column-Level Statistical Metrics</h3>
             </div>
             <span className="text-xs text-slate-400 dark:text-[#8ba3c9]">
               Comprehensive profiling including Mean, Median, Min, Max, StdDev, Q1, Q3, IQR &amp; Mode

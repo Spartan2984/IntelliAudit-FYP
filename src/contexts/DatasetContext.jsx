@@ -239,7 +239,7 @@ export function DatasetProvider({ children }) {
   };
 
   const value = {
-    // Datasets (Both camelCase and snake_case Phase A outputs)
+    // Datasets (Both camelCase and snake_case outputs)
     originalDataset,
     workingDataset,
     original_dataset: originalDataset,

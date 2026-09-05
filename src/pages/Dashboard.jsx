@@ -93,7 +93,7 @@ export default function Dashboard() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-3 py-1 bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 rounded-full text-xs font-semibold tracking-wider uppercase">
-              Phase A &bull; Profiling
+              Data Health
             </span>
             <span className="text-xs text-slate-400 dark:text-[#8ba3c9]">Step 3 of 8</span>
           </div>

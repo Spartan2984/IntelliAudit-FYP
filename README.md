@@ -7,14 +7,14 @@ $$\text{Detection} \longrightarrow \text{Explanation} \longrightarrow \text{Reco
 
 ---
 
-## 📌 Phase A : Dataset Upload, Profiling & Missing-Value Processing
+## 📌 Core Modules: Dataset Ingestion, Profiling & Missing-Value Processing
 
-**Role & Objective:**  
-Build the core foundation of the system by correctly uploading, validating, parsing, profiling, and preprocessing the dataset while preserving an immutable `original_dataset` and generating an active `working_dataset` for subsequent modules.
+**Objective:**  
+Build the foundation of the data quality system by uploading, validating, parsing, profiling, and preprocessing raw datasets while preserving an immutable master dataset and generating an active working dataset for downstream quality auditing.
 
-### Detailed Modules Implemented:
+### Key System Capabilities:
 
-#### **A.1 CSV Upload & Validation**
+#### **1. CSV Upload & Validation**
 * **File Ingestion:** Drag-and-drop or manual CSV file selector with delimiter detection.
 * **Validation Engine:**
   - File format validation (standard `.csv` MIME types).
@@ -24,7 +24,7 @@ Build the core foundation of the system by correctly uploading, validating, pars
 * **Ingestion Feedback:** Immediate display of file name, total rows, total columns, file size, and upload status (`✓ Successful`).
 * **Benchmark Sample Data:** Instant loader for a benchmark test dataset with realistic missing values, outliers, and duplicates.
 
-#### **A.2 Dual Dataset Architecture**
+#### **2. Dual Dataset Architecture**
 ```
 Uploaded CSV
      ↓
@@ -36,7 +36,7 @@ Working Dataset (working_dataset)    ───→  Active Copy for Cleaning & Pr
 * `working_dataset`: Active working copy on which approved imputations and transformations are applied.
 * `resetToOriginal()`: Rollback feature allowing one-click restoration to raw state.
 
-#### **A.3 Comprehensive Dataset & Column Profiling**
+#### **3. Comprehensive Dataset & Column Profiling**
 * **Dataset-Level Information:**
   - Total records count
   - Total columns count
@@ -64,18 +64,18 @@ Working Dataset (working_dataset)    ───→  Active Copy for Cleaning & Pr
   - Mode frequency & modal percentage
   - Top-5 frequent classes distribution
 
-#### **A.4 Missing-Value Detection Engine**
+#### **4. Missing-Value Detection Engine**
 * Scans all standard missing value markers across all fields:
   `NaN`, `NULL`, `N/A`, `NA`, `#N/A`, `none`, `nil`, `-`, `?`, `undefined`, `missing`, and empty strings `""`.
 * Generates column-by-column missing distribution charts and detection summaries.
 
-#### **A.5 Mean / Median / Mode Imputation Algorithms**
+#### **5. Mean / Median / Mode Imputation Algorithms**
 * **Numerical Columns:** Mean and Median imputation algorithms.
 * **Categorical Columns:** Mode imputation and custom constant replacement (`Unknown`).
 * **ID / Key Columns:** Row deletion (`Drop Rows`) or custom key assignment to prevent synthetic collision.
 * **Live Before vs After Comparison:** Row-level visual diff highlighting transformed cells.
 
-#### **A.6 Explainable AI & Statistical Heuristic Recommendations**
+#### **6. Explainable AI & Statistical Heuristic Recommendations**
 * **Heuristic Strategy Selection:**
   - **Skewed Numeric Distributions ($|\text{Skewness}| > 0.8$ or High IQR):** Recommends **Median** with rationale explaining resistance to extreme outlier distortion.
   - **Symmetric Numeric Distributions:** Recommends **Mean** with rationale explaining preservation of central tendency.
@@ -86,8 +86,8 @@ Working Dataset (working_dataset)    ───→  Active Copy for Cleaning & Pr
   - Batch **Approve All Recommendations**
   - Custom method selector (choose alternative methods or enter custom constant values)
 
-#### **A.7 Standard Module Outputs (Exported via `DatasetContext`)**
-All subsequent pipeline stages consume the following standard objects:
+#### **7. Standard Data Contracts & Context API**
+All pipeline stages consume the following standard objects:
 1. `original_dataset` / `originalDataset`: Master raw dataset `{ headers: [], rows: [] }`
 2. `working_dataset` / `workingDataset`: Active cleaned dataset `{ headers: [], rows: [] }`
 3. `dataset_profile` / `datasetProfile`: Complete dataset-level statistics and metadata
@@ -116,8 +116,6 @@ All subsequent pipeline stages consume the following standard objects:
 
 ### Installation
 ```bash
-git clone https://github.com/SonaSU2027/IntelliAudit.git
-cd IntelliAudit
 npm install
 ```
 
@@ -148,9 +146,9 @@ IntelliAudit/
 │   ├── pages/
 │   │   ├── Home.jsx              # Landing page with interactive hero
 │   │   ├── Workflow.jsx          # Auditing stage selection portal
-│   │   ├── Upload.jsx            # Phase A.1: CSV upload, validation & metadata
-│   │   ├── Preview.jsx           # Phase A.3: Statistical profiling & data grid
-│   │   ├── MissingValues.jsx     # Phase A.4-A.6: Detection, recommendations & imputation
+│   │   ├── Upload.jsx            # CSV upload, validation & metadata
+│   │   ├── Preview.jsx           # Statistical profiling & data grid
+│   │   ├── MissingValues.jsx     # Detection, recommendations & imputation
 │   │   ├── Dashboard.jsx         # Live overview of data health & missingness
 │   │   ├── Duplicates.jsx        # Duplicate record detection
 │   │   ├── CleaningActions.jsx   # Custom cleaning operations

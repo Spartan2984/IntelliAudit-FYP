@@ -1,5 +1,5 @@
 /**
- * Data Profiler Utility for IntelliAudit (Phase A - Sona)
+ * Data Profiler Utility for IntelliAudit
  * Handles type inference, descriptive statistics, dataset-level & column-level profiling.
  */
 

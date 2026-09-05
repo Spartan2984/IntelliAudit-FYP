@@ -135,7 +135,7 @@ export default function MissingValues() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-3 py-1 bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 rounded-full text-xs font-semibold tracking-wider uppercase">
-              Phase A &bull; Sona
+              Missing Values
             </span>
             <span className="text-xs text-slate-400 dark:text-[#8ba3c9]">Step 4 of 8</span>
           </div>
@@ -519,7 +519,7 @@ export default function MissingValues() {
           <div className="p-4 border-b border-slate-200 dark:border-[#1a325a] flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
               <ListTodo className="w-4 h-4 text-blue-500" />
-              Imputation Execution Log (Phase A Audit Records)
+              Imputation Execution Log (Audit Records)
             </h3>
             <span className="text-xs text-slate-400">{imputationResults.length} operations executed</span>
           </div>

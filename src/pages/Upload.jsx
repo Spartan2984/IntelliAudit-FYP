@@ -155,7 +155,7 @@ Sarah Connor,33,sarah@example.com,Los Angeles,110000`;
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-2">
           <span className="px-3 py-1 bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 rounded-full text-xs font-semibold tracking-wider uppercase">
-            Phase A &bull; Sona
+            Data Ingestion
           </span>
           <span className="text-xs text-slate-400 dark:text-[#8ba3c9]">Step 1 of 8</span>
         </div>
@@ -197,7 +197,7 @@ Sarah Connor,33,sarah@example.com,Los Angeles,110000`;
             <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{metadata.filename}</h3>
           </div>
           
-          {/* Phase A Upload Status Box */}
+          {/* Upload Status Box */}
           <div className="my-6 w-full max-w-lg bg-slate-50 dark:bg-[#0a1f44]/80 p-5 rounded-xl border border-slate-200 dark:border-[#1a325a]">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
               <div>
