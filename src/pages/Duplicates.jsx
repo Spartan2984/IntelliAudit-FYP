@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend
+  PieChart, Pie, Cell, Tooltip, Legend
 } from 'recharts';
 import {
   AlertTriangle, Copy, Activity, CheckCircle2,
@@ -8,9 +8,10 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useDataset } from '../contexts/DatasetContext';
+import { runDetectionEngine } from '../utils/detectionEngine.js';
 
 export default function Duplicates() {
-  const { dataset } = useDataset();
+  const { dataset, setDetectionResults } = useDataset();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [activeTab, setActiveTab] = useState('duplicates');
@@ -26,105 +27,221 @@ export default function Duplicates() {
     cleanPercent: '100%'
   });
 
-  const handleRunAnalysis = () => {
-    if (!dataset || !dataset.rows) {
-      alert("Please upload a dataset first.");
+    const handleRunAnalysis = () => {
+    if (!dataset || !dataset.rows || !dataset.headers) {
+      alert('Please upload a dataset first.');
       return;
     }
 
     setIsAnalyzing(true);
 
-    setTimeout(() => {
+    try {
       const rows = dataset.rows;
       const headers = dataset.headers;
 
-      // 1. Exact Duplicate Detection
-      const seen = new Map();
-      const duplicates = [];
+      // Run the complete Phase-B detection engine.
+      const results = runDetectionEngine(rows, headers);
+      setDetectionResults(results);
 
-      rows.forEach((row, index) => {
-        const hash = JSON.stringify(row);
-        if (seen.has(hash)) {
-          duplicates.push({ ...row, _originalIndex: seen.get(hash), id: index });
-        } else {
-          seen.set(hash, index);
-        }
-      });
+      const {
+        duplicate_results,
+        anomaly_results,
+        rule_violation_results,
+        fuzzy_duplicate_results,
+        inconsistency_results,
+        detection_summary
+      } = results;
 
-      // 2. Simple Anomaly Detection (Statistical Outliers for Numeric Columns)
-      const anomalies = [];
-      headers.forEach(header => {
-        const values = rows
-          .map(r => parseFloat(r[header]))
-          .filter(v => !isNaN(v) && isFinite(v));
+      /*
+       * Convert detection evidence into rows that the
+       * existing preview table can display.
+       */
+      const duplicatePreview = [
+        ...duplicate_results,
+        ...fuzzy_duplicate_results
+      ]
+        .slice(0, 50)
+        .map((item) => ({
+          ...rows[item.row],
+          id: item.row,
+          _issue: item.issueType,
+          _method: item.detectionMethod,
+          _severity: item.severity,
+          _confidence: item.confidence
+        }));
 
-        if (values.length > 5) {
-          const mean = values.reduce((a, b) => a + b, 0) / values.length;
-          const stdDev = Math.sqrt(values.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b, 0) / values.length);
+      // Group anomaly evidence by dataset row so the same row
+// is shown only once even when multiple detectors flag it.
+const anomalyMap = new Map();
 
-          rows.forEach((row, index) => {
-            const val = parseFloat(row[header]);
-            if (!isNaN(val) && isFinite(val)) {
-              const zScore = Math.abs((val - mean) / stdDev);
-              if (zScore > 3) {
-                anomalies.push({
-                  ...row,
-                  id: index,
-                  _issue: `Outlier in ${header}`,
-                  _value: val,
-                  _header: header
-                });
-              }
-            }
-          });
-        }
-      });
+anomaly_results.forEach((item) => {
+  if (!anomalyMap.has(item.row)) {
+    anomalyMap.set(item.row, {
+      ...rows[item.row],
+      id: item.row,
+      _issue: item.issueType,
+      _methods: [],
+      _headers: [],
+      _severity: item.severity,
+      _confidence: item.confidence
+    });
+  }
 
-      setDuplicateRows(duplicates.slice(0, 50)); // Limit for preview
-      setAnomalyRows(anomalies.slice(0, 50));
+  const existing = anomalyMap.get(item.row);
 
-      const totalIssues = duplicates.length + anomalies.length;
-      const cleanPercent = Math.max(0, 100 - (totalIssues / rows.length) * 100).toFixed(1);
+  if (item.detectionMethod && !existing._methods.includes(item.detectionMethod)) {
+    existing._methods.push(item.detectionMethod);
+  }
+
+  if (item.column && !existing._headers.includes(item.column)) {
+    existing._headers.push(item.column);
+  }
+
+  // Keep the highest severity/confidence evidence available.
+  if (item.severity === 'High') {
+    existing._severity = 'High';
+  }
+
+  if (
+    typeof item.confidence === 'number' &&
+    (
+      typeof existing._confidence !== 'number' ||
+      item.confidence > existing._confidence
+    )
+  ) {
+    existing._confidence = item.confidence;
+  }
+});
+
+const anomalyPreview = Array.from(anomalyMap.values()).slice(0, 50);
+
+      setDuplicateRows(duplicatePreview);
+      setAnomalyRows(anomalyPreview);
+
+      /*
+       * Use the summary generated by the detection engine.
+       */
+      const totalIssues = detection_summary.totalIssues;
+
+      const duplicateCount =
+        detection_summary.exactDuplicates +
+        detection_summary.fuzzyDuplicates;
+
+      const anomalyCount =
+        detection_summary.statisticalAnomalies +
+        detection_summary.isolationForestAnomalies;
+
+      const cleanPercent = Math.max(
+        0,
+        100 - (totalIssues / rows.length) * 100
+      ).toFixed(1);
 
       setStats({
         totalIssues,
-        duplicates: duplicates.length,
-        anomalies: anomalies.length,
-        cleanPercent: cleanPercent + '%'
+        duplicates: duplicateCount,
+        anomalies: anomalyCount,
+        cleanPercent: `${cleanPercent}%`
       });
 
+      /*
+       * Quality breakdown chart.
+       */
       const pieData = [
-        { name: 'Clean Data', value: parseFloat(cleanPercent), color: '#10b981' },
-        { name: 'Exact Duplicates', value: parseFloat(((duplicates.length / rows.length) * 100).toFixed(1)), color: '#f59e0b' },
-        { name: 'Anomalies', value: parseFloat(((anomalies.length / rows.length) * 100).toFixed(1)), color: '#ef4444' },
+        {
+          name: 'Clean Data',
+          value: parseFloat(cleanPercent),
+          color: '#10b981'
+        },
+        {
+          name: 'Duplicates',
+          value: parseFloat(
+            ((duplicateCount / rows.length) * 100).toFixed(1)
+          ),
+          color: '#f59e0b'
+        },
+        {
+          name: 'Anomalies',
+          value: parseFloat(
+            ((anomalyCount / rows.length) * 100).toFixed(1)
+          ),
+          color: '#ef4444'
+        }
       ];
+
       setChartData(pieData);
 
-      // Recommendations
+      /*
+       * Explainable recommendations.
+       *
+       * Detection only — no data is modified or deleted here.
+       */
       const recs = [];
-      if (duplicates.length > 0) {
+
+      if (duplicate_results.length > 0) {
         recs.push({
           issue: 'Exact Duplicates',
-          rec: 'Auto-Drop',
-          reason: `Found ${duplicates.length} exactly identical rows. Dropping them is recommended.`
+          rec: 'Review',
+          reason: `Found ${duplicate_results.length} exact duplicate records. Review them before any removal is approved.`
         });
       }
-      if (anomalies.length > 0) {
-        const topAnomaly = anomalies[0];
+
+      if (fuzzy_duplicate_results.length > 0) {
         recs.push({
-          issue: 'Statistical Outliers',
-          rec: 'Investigate',
-          reason: `${anomalies.length} rows flagged by Z-Score. Check values like ${topAnomaly._value} in ${topAnomaly._header}.`
+          issue: 'Fuzzy Duplicates',
+          rec: 'Review',
+          reason: `Found ${fuzzy_duplicate_results.length} records with high similarity. Review the suggested matches before making changes.`
         });
       }
-      if (recs.length === 0) {
-        recs.push({ issue: 'All Clear', rec: 'No Action', reason: 'Dataset looks clean and consistent.' });
+
+      if (anomaly_results.length > 0) {
+        const topAnomaly = anomaly_results[0];
+
+        recs.push({
+          issue: 'Anomalies',
+          rec: 'Investigate',
+          reason: `${anomaly_results.length} statistical or multivariate anomalies were detected. Example: ${topAnomaly.column}.`
+        });
       }
+
+      if (rule_violation_results.length > 0) {
+        recs.push({
+          issue: 'Rule Violations',
+          rec: 'Review',
+          reason: `Found ${rule_violation_results.length} values or cross-column relationships that violate defined validation rules.`
+        });
+      }
+
+      if (inconsistency_results.length > 0) {
+        recs.push({
+          issue: 'Category Inconsistencies',
+          rec: 'Review',
+          reason: `Found ${inconsistency_results.length} possible category/typing inconsistencies. Suggested corrections require user approval.`
+        });
+      }
+
+      if (recs.length === 0) {
+        recs.push({
+          issue: 'All Clear',
+          rec: 'No Action',
+          reason: 'No duplicate, anomaly, rule violation, or inconsistency was detected.'
+        });
+      }
+
       setRecommendations(recs);
 
       setIsAnalyzing(false);
       setAnalysisComplete(true);
-    }, 2500);
+    } catch (error) {
+      console.error('Detection engine failed:', error);
+      console.error('Error message:', error?.message);
+      console.error('Error stack:', error?.stack);
+
+      setIsAnalyzing(false);
+
+      alert(
+        `Detection engine error: ${error?.message || 'Unknown error'}`
+      );
+    }
   };
 
   return (
@@ -272,41 +389,44 @@ export default function Duplicates() {
                 </h3>
               </div>
               <div className="h-[320px] w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={chartData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={80}
-                      outerRadius={110}
-                      paddingAngle={5}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                        borderColor: '#1e293b',
-                        color: '#f8fafc',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                      }}
-                      itemStyle={{ color: '#f8fafc' }}
-                      formatter={(value) => `${value}%`}
-                    />
-                    <Legend
-                      verticalAlign="bottom"
-                      height={36}
-                      iconType="circle"
-                      wrapperStyle={{ fontSize: '14px', paddingTop: '20px' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                <PieChart width={500} height={320}>
+                  <Pie
+                    data={chartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={80}
+                    outerRadius={110}
+                    paddingAngle={5}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                      borderColor: '#1e293b',
+                      color: '#f8fafc',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                    itemStyle={{ color: '#f8fafc' }}
+                    formatter={(value) => `${value}%`}
+                  />
+
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
+                    iconType="circle"
+                    wrapperStyle={{
+                      fontSize: '14px',
+                      paddingTop: '20px'
+                    }}
+                  />
+                </PieChart>
               </div>
             </div>
 
@@ -343,19 +463,37 @@ export default function Duplicates() {
                 <ul className="space-y-3 relative z-10">
                   <li className="flex items-center gap-3 text-sm">
                     <div className="w-2 h-2 rounded-full bg-white/80"></div>
-                    Isolation Forest (Outliers)
+                    Isolation Forest (Multivariate)
                   </li>
+
                   <li className="flex items-center gap-3 text-sm">
                     <div className="w-2 h-2 rounded-full bg-white/80"></div>
-                    TF-IDF & Cosine Sim (Fuzzy)
+                    Levenshtein Similarity (Fuzzy Matching)
                   </li>
+
                   <li className="flex items-center gap-3 text-sm">
                     <div className="w-2 h-2 rounded-full bg-white/80"></div>
-                    Z-Score (Statistical)
+                    Z-Score & IQR (Statistical)
                   </li>
+
                   <li className="flex items-center gap-3 text-sm">
                     <div className="w-2 h-2 rounded-full bg-white/80"></div>
-                    Exact Hashing (MD5)
+                    Exact Duplicate Detection
+                  </li>
+
+                  <li className="flex items-center gap-3 text-sm">
+                    <div className="w-2 h-2 rounded-full bg-white/80"></div>
+                    Business Rule Validation
+                  </li>
+
+                  <li className="flex items-center gap-3 text-sm">
+                    <div className="w-2 h-2 rounded-full bg-white/80"></div>
+                    Cross-Column Validation
+                  </li>
+
+                  <li className="flex items-center gap-3 text-sm">
+                    <div className="w-2 h-2 rounded-full bg-white/80"></div>
+                    Category Inconsistency Detection
                   </li>
                 </ul>
               </div>
@@ -427,7 +565,7 @@ export default function Duplicates() {
             )}
             {activeTab === 'anomalies' && anomalyRows.length > 0 && (
               <p className="text-xs text-rose-600 dark:text-rose-400 mt-4 flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3" /> Note: These values deviate significantly from the column mean (Z-Score {'>'} 3).
+                <AlertTriangle className="w-3 h-3" /> Note: These rows were flagged by one or more statistical or multivariate anomaly detection methods. Review the evidence before taking action.
               </p>
             )}
           </div>

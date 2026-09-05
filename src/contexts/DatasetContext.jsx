@@ -32,7 +32,15 @@ export function DatasetProvider({ children }) {
   // Missing Value Analysis & Recommendations
   const [missingRecommendations, setMissingRecommendations] = useState([]);
   const [imputationResults, setImputationResults] = useState([]);
-  
+  // Phase-B Detection Results
+  const [detectionResults, setDetectionResults] = useState({
+    duplicate_results: [],
+    anomaly_results: [],
+    rule_violation_results: [],
+    fuzzy_duplicate_results: [],
+    inconsistency_results: [],
+    detection_summary: null
+  });
   // Comprehensive Audit Trail
   const [auditLog, setAuditLog] = useState([]);
   
@@ -89,6 +97,15 @@ export function DatasetProvider({ children }) {
     });
 
     setImputationResults([]);
+    // Reset Phase-B detection results for the newly uploaded dataset
+    setDetectionResults({
+      duplicate_results: [],
+      anomaly_results: [],
+      rule_violation_results: [],
+      fuzzy_duplicate_results: [],
+      inconsistency_results: [],
+      detection_summary: null
+    });
     setAuditLog([
       {
         id: 'log-0',
@@ -337,6 +354,17 @@ export function DatasetProvider({ children }) {
     setColumnMetadata([]);
     setMissingRecommendations([]);
     setImputationResults([]);
+
+    // Clear Phase-B detection results
+    setDetectionResults({
+      duplicate_results: [],
+      anomaly_results: [],
+      rule_violation_results: [],
+      fuzzy_duplicate_results: [],
+      inconsistency_results: [],
+      detection_summary: null
+    });
+
     setAuditLog([]);
   }, []);
 
@@ -372,6 +400,11 @@ export function DatasetProvider({ children }) {
     missing_value_report: missingRecommendations,
     imputationResults,
     imputation_results: imputationResults,
+
+    // Phase-B Detection
+    detectionResults,
+    detection_results: detectionResults,
+    setDetectionResults,
     
     // Audit Trail
     auditLog,
